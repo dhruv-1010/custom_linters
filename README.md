@@ -124,124 +124,138 @@ import { Image } from 'react-native';
 
 **Implementation**: Detects Tailwind class usage in JSX attributes.
 
-## AST Implementation
-
-Our linters use TypeScript's AST capabilities through `@typescript-eslint/utils`. Here's a simplified example of how AST is used:
+### 8. `enforceExplicitUndefined`
+**Purpose**: Enforces explicit undefined passing for optional parameters to make code intent clearer.
 
 ```typescript
-// Example AST node structure for a function
-FunctionDeclaration {
-    id: Identifier { name: "greet" },
-    params: [
-        Parameter {
-            name: "name",
-            typeAnnotation: TSTypeAnnotation {
-                typeAnnotation: TSUnionType {
-                    types: [
-                        TSStringKeyword {},
-                        TSUndefinedKeyword {}
-                    ]
-                }
-            }
-        }
-    ],
-    body: BlockStatement {
-        // Function body
-    }
+// ❌ Bad
+function formatDate(date?: Date) {}
+formatDate(); // Implicit undefined
+
+// ✅ Good
+function formatDate(date: Date | undefined) {}
+formatDate(undefined); // Explicit undefined
+```
+
+**Implementation**: Uses AST to detect optional parameters and enforce explicit undefined passing.
+
+**Why**:
+- Makes undefined state explicit in type signatures
+- Forces conscious undefined passing
+- Prevents forgotten optional chaining
+- Better aligns with TypeScript strict mode
+
+### 9. `enforceExpressionCleanup`
+**Purpose**: Enforces cleaner code by preventing unused expressions without side effects.
+
+```typescript
+// ✅ Allowed
+isValid && submitForm();
+isLoading ? <Spinner /> : <Content />;
+
+// ❌ Blocked
+someValue; // No side effects
+unusedFunction(); // No side effects
+```
+
+**Implementation**: Uses `@typescript-eslint/no-unused-expressions` with smart exceptions.
+
+**Why**:
+- Enforces cleaner, more explicit code
+- Prevents accidental no-op statements
+- Allows common patterns like optional chaining
+
+### 10. `enforceStrictNavigationTypes`
+**Purpose**: Ensures type-safe navigation by enforcing proper typing for navigation calls.
+
+```typescript
+// ❌ Bad
+const navigation = useNavigation<StackNavigationProp<any>>();
+navigation.navigate('Screen', { data: any });
+
+// ✅ Good
+const navigation: StackNavigationProp<GlobalParamList> = useNavigation();
+navigation.navigate('Screen', { data: ScreenParams });
+```
+
+**Implementation**: Analyzes navigation calls and their type parameters.
+
+**Why**:
+- Ensures correct screen names & params at compile time
+- Prevents runtime navigation errors
+- Makes refactoring safer
+
+### 11. `enforceImmutability`
+**Purpose**: Enforces functional programming practices by preventing unintended mutations.
+
+```typescript
+// ❌ Bad
+let variable = 0;
+function addItem(items: string[], newItem: string) {
+    items.push(newItem); // Mutates original array
 }
-```
 
-## Usage Examples
-
-### 1. Creating a New Linter
-
-```typescript
-import { ESLintUtils } from '@typescript-eslint/utils';
-import type { TSESTree } from '@typescript-eslint/types';
-
-export const myCustomRule = ESLintUtils.RuleCreator.withoutDocs({
-    meta: {
-        type: 'problem',
-        messages: {
-            errorMessage: 'Custom error message'
-        }
-    },
-    create(context) {
-        return {
-            // AST visitor methods
-            CallExpression(node: TSESTree.CallExpression) {
-                // Rule implementation
-            }
-        };
-    }
-});
-```
-
-### 2. Using TypeScript's Type Checker
-
-```typescript
-const parserServices = context.sourceCode.parserServices;
-const checker = parserServices?.program?.getTypeChecker();
-
-if (checker) {
-    const type = checker.getTypeAtLocation(node);
-    // Type analysis
+// ✅ Good
+const variable = 0;
+function addItem(items: readonly string[], newItem: string) {
+    return [...items, newItem]; // Returns new array
 }
+
+// ✅ Exceptions (Allowed)
+const ref = useRef(0);
+ref.current = 5; // Allowed mutation
+const selectUserProfile = (state: RootState) => selectUser(state).profile;
 ```
 
-## Rule Details
+**Implementation**: Uses AST to detect mutable operations and enforce immutability.
 
-### AST Node Types Used
+**Why**:
+- Ensures data integrity
+- Makes state transitions predictable
+- Reduces race conditions
+- Avoids unnecessary re-renders
 
-1. **Type Checking Nodes**:
-   - `TSAnyKeyword`
-   - `TSUnionType`
-   - `TSIntersectionType`
-   - `TSTypeReference`
+### 12. `enforceStaticImageImports`
+**Purpose**: Enforces ES6 imports for static images instead of require().
 
-2. **JSX Nodes**:
-   - `JSXElement`
-   - `JSXAttribute`
-   - `JSXExpressionContainer`
-
-3. **Function Nodes**:
-   - `FunctionDeclaration`
-   - `ArrowFunctionExpression`
-   - `CallExpression`
-
-4. **TypeScript Specific Nodes**:
-   - `TSInterfaceDeclaration`
-   - `TSPropertySignature`
-   - `TSTypeAnnotation`
-
-### Common Patterns
-
-1. **Type Checking**:
 ```typescript
-function isObjectOrArrayType(type: ts.Type, checker: ts.TypeChecker): boolean {
-    return type.isUnion()
-        ? type.types.some(t => isObjectOrArrayType(t, checker))
-        : type.getFlags() & ts.TypeFlags.Object;
-}
+// ❌ Bad
+const logo = require('@/assets/logo.png');
+
+// ✅ Good
+import logo from '@/assets/logo.png';
 ```
 
-2. **JSX Analysis**:
+**Implementation**: Analyzes image import statements and usage patterns.
+
+**Why**:
+- Ensures type safety
+- Matches React Native's static asset handling
+- Makes dependencies explicit
+
+## Migration and Adoption
+
+### Automated Fixes
+Our custom linters provide automatic fixes for most cases:
 ```typescript
-JSXElement(node: TSESTree.JSXElement) {
-    if (node.openingElement.name.type === 'JSXIdentifier') {
-        // Analyze JSX element
-    }
-}
+// Before
+function fetchData(options?: FetchOptions) {}
+const navigation = useNavigation<any>();
+
+// After (automatically fixed)
+function fetchData(options: FetchOptions | undefined) {}
+const navigation: StackNavigationProp<GlobalParamList> = useNavigation();
 ```
 
-3. **Function Analysis**:
-```typescript
-CallExpression(node: TSESTree.CallExpression) {
-    if (node.callee.type === 'Identifier') {
-        // Analyze function calls
-    }
-}
-```
+### Backward Compatibility
+- Rules are designed to maintain backward compatibility
+- Explicit undefined passing ensures new changes don't break existing code
+- Migration scripts help transition existing code
+
+### Progress Tracking
+- Reduced `any` usage from 300 to ~40 instances in src and src-v2
+- Ongoing migration from Tailwind to CSS
+- Continuous improvement in type safety
 
 ## Best Practices
 
@@ -260,6 +274,21 @@ CallExpression(node: TSESTree.CallExpression) {
    - Document complex AST traversals
    - Use meaningful error messages
 
+4. **Navigation Safety**:
+   - Always use `GlobalParamList` for navigation types
+   - Avoid `any` in navigation props
+   - Define proper params for each route
+
+5. **Immutability**:
+   - Use spread operators for updates
+   - Prefer immutable utility methods
+   - Document necessary mutations
+
+6. **Asset Management**:
+   - Use ES6 imports for static assets
+   - Define proper type definitions for assets
+   - Avoid runtime require() calls
+
 ## Contributing
 
 To add a new custom linter:
@@ -270,8 +299,17 @@ To add a new custom linter:
 4. Update this documentation
 5. Add the rule to `index.ts`
 
+### Migration Guidelines
+1. Use automated fixes where available
+2. Handle exceptions manually when necessary
+3. Update type definitions as needed
+4. Document any necessary rule exceptions
+
 ## References
 
 - [TypeScript AST Viewer](https://ts-ast-viewer.com/)
 - [@typescript-eslint Documentation](https://typescript-eslint.io/)
 - [ESLint Rule Documentation](https://eslint.org/docs/developer-guide/working-with-rules)
+- [React Native TypeScript Guide](https://reactnative.dev/docs/typescript)
+- [TypeScript Strict Mode](https://www.typescriptlang.org/tsconfig#strict)
+- [React Native Performance](https://reactnative.dev/docs/performance)
