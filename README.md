@@ -1,152 +1,81 @@
 # Custom Linters Documentation
 
-## Overview
-This document explains the custom linting rules implemented in our React Native project. These linters use Abstract Syntax Tree (AST) analysis to enforce code quality, type safety, and best practices specific to our codebase.
+This document outlines the custom linting rules implemented in our React Native project to maintain code quality and consistency.
 
 ## Table of Contents
-1. [Introduction](#introduction)
-2. [Available Rules](#available-rules)
-3. [AST Implementation](#ast-implementation)
-4. [Usage Examples](#usage-examples)
-5. [Rule Details](#rule-details)
+1. [Explicit Optional Parameters](#explicit-optional-parameters)
+2. [Safe Hook Dependencies](#safe-hook-dependencies)
+3. [Explicit Undefined Passing](#explicit-undefined-passing)
+4. [Expression Cleanup](#expression-cleanup)
+5. [Tailwind Usage Restriction](#tailwind-usage-restriction)
+6. [Strict Stack Navigation Types](#strict-stack-navigation-types)
+7. [Strict Types in Modified Files](#strict-types-in-modified-files)
+8. [Enforced Immutability](#enforced-immutability)
+9. [ES6 Imports for Static Images](#es6-imports-for-static-images)
 
-## Introduction
+## Explicit Optional Parameters
 
-Our custom linters are built using `@typescript-eslint/utils` and leverage TypeScript's AST capabilities to enforce project-specific rules. These linters help maintain code quality by:
-
-- Enforcing type safety
-- Preventing common React Native anti-patterns
-- Ensuring consistent code style
-- Catching potential runtime errors at compile time
-
-## Available Rules
-
-### 1. `noAnyInModifiedFiles`
-**Purpose**: Ensures type safety in modified files by preventing the use of `any` type.
+**Rule**: Replace optional parameters (`param?: Type`) with union types (`param: Type | undefined`).
 
 ```typescript
-// ❌ Bad
-const data: any = fetchData();
+// ❌ Avoid
+function fetchData(options?: FetchOptions) {}
 
-// ✅ Good
-const data: ApiResponse = fetchData();
+// ✅ Use
+function fetchData(options: FetchOptions | undefined) {}
 ```
 
-**Implementation**: Uses AST to detect `TSAnyKeyword` nodes and git operations to check only modified files.
-
-### 2. `noHookDep`
-**Purpose**: Prevents object-like values in React hook dependencies to avoid unnecessary re-renders.
-
-```typescript
-// ❌ Bad
-useEffect(() => {
-  // effect
-}, [{ id: 1 }]); // Object in dependency array
-
-// ✅ Good
-const dependency = useMemo(() => ({ id: 1 }), []);
-useEffect(() => {
-  // effect
-}, [dependency]);
-```
-
-**Implementation**: Analyzes `CallExpression` nodes to find hook usages and checks dependency array types.
-
-### 3. `enforceOptionalParams`
-**Purpose**: Enforces proper typing of optional parameters using `type | undefined` instead of optional parameters.
-
-```typescript
-// ❌ Bad
-function greet(name?: string) {
-  return `Hello ${name}`;
-}
-
-// ✅ Good
-function greet(name: string | undefined) {
-  return `Hello ${name}`;
-}
-```
-
-**Implementation**: Uses AST to transform optional parameter syntax and enforce type safety.
-
-### 4. `noAnyNavigations`
-**Purpose**: Ensures type-safe navigation in React Native.
-
-```typescript
-// ❌ Bad
-navigation.navigate('Screen', { data: any });
-
-// ✅ Good
-navigation.navigate('Screen', { data: ScreenParams });
-```
-
-**Implementation**: Analyzes navigation calls and their parameters using TypeScript's type checker.
-
-### 5. `noDuplicateTestId`
-**Purpose**: Prevents duplicate test IDs across the application.
-
-```typescript
-// ❌ Bad
-<View testID="submit-button" />
-<Button testID="submit-button" />
-
-// ✅ Good
-<View testID="form-submit-button" />
-<Button testID="modal-submit-button" />
-```
-
-**Implementation**: Tracks test IDs across the codebase using AST traversal.
-
-### 6. `noLazyPngImports`
-**Purpose**: Enforces proper image import patterns in React Native.
-
-```typescript
-// ❌ Bad
-const image = require('./image.png');
-
-// ✅ Good
-import { Image } from 'react-native';
-<Image source={require('./image.png')} />
-```
-
-**Implementation**: Analyzes import statements and image usage patterns.
-
-### 7. `noTailwindUsage`
-**Purpose**: Enforces consistent styling approach by preventing Tailwind usage.
-
-```typescript
-// ❌ Bad
-<View className="flex-1 bg-white" />
-
-// ✅ Good
-<View style={styles.container} />
-```
-
-**Implementation**: Detects Tailwind class usage in JSX attributes.
-
-### 8. `enforceExplicitUndefined`
-**Purpose**: Enforces explicit undefined passing for optional parameters to make code intent clearer.
-
-```typescript
-// ❌ Bad
-function formatDate(date?: Date) {}
-formatDate(); // Implicit undefined
-
-// ✅ Good
-function formatDate(date: Date | undefined) {}
-formatDate(undefined); // Explicit undefined
-```
-
-**Implementation**: Uses AST to detect optional parameters and enforce explicit undefined passing.
-
-**Why**:
+**Benefits**:
 - Makes undefined state explicit in type signatures
 - Forces conscious undefined passing
 - Prevents forgotten optional chaining
-- Better aligns with TypeScript strict mode
+- Reduces runtime surprises
 
-### 9. `enforceExpressionCleanup`
-**Purpose**: Enforces cleaner code by preventing unused expressions without side effects.
+## Safe Hook Dependencies
+
+**Rule**: Objects/arrays in useEffect dependencies will trigger warnings.
+
+```typescript
+// ❌ Avoid - unstable dependency
+useEffect(() => {
+  // effect
+}, [userData]);
+
+// ✅ Use - stable dependencies
+useEffect(() => {
+  // effect
+}, [userData.id]);
+```
+
+**Benefits**:
+- Prevents infinite loops
+- Forces stable dependency references
+- Makes effect dependencies more predictable
+- Easier to track effect execution
+
+## Explicit Undefined Passing
+
+**Rule**: Functions with `| undefined` parameters require explicit undefined when called without arguments.
+
+```typescript
+// ❌ Avoid
+function formatDate(date?: Date) {}
+formatDate();
+
+// ✅ Use
+function formatDate(date: Date | undefined) {}
+formatDate(undefined);
+```
+
+**Benefits**:
+- Clearer intent in function calls
+- Better TypeScript strict mode compliance
+- Safer parameter additions
+- Prevents accidental undefined passing
+
+## Expression Cleanup
+
+**Rule**: Enforces `@typescript-eslint/no-unused-expressions` with smart exceptions.
 
 ```typescript
 // ✅ Allowed
@@ -155,161 +84,132 @@ isLoading ? <Spinner /> : <Content />;
 
 // ❌ Blocked
 someValue; // No side effects
-unusedFunction(); // No side effects
 ```
 
-**Implementation**: Uses `@typescript-eslint/no-unused-expressions` with smart exceptions.
+**Benefits**:
+- Prevents unused expressions
+- Catches accidental no-op statements
+- Allows common patterns (optional chaining, short-circuiting)
 
-**Why**:
-- Enforces cleaner, more explicit code
-- Prevents accidental no-op statements
-- Allows common patterns like optional chaining
+## Tailwind Usage Restriction
 
-### 10. `enforceStrictNavigationTypes`
-**Purpose**: Ensures type-safe navigation by enforcing proper typing for navigation calls.
+**Rule**: Tailwind-based styling is disallowed in favor of React Native's StyleSheet.
 
 ```typescript
-// ❌ Bad
+// ❌ Avoid
+const styles = tailwind('bg-red-500 text-white');
+
+// ✅ Use
+import { StyleSheet } from 'react-native';
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: 'red',
+    color: 'white',
+  },
+});
+```
+
+**Benefits**:
+- Prevents unnecessary re-renders
+- Better performance
+- Native styling approach
+
+## Strict Stack Navigation Types
+
+**Rule**: Enforces proper typing for navigation calls.
+
+```typescript
+// ❌ Avoid
 const navigation = useNavigation<StackNavigationProp<any>>();
-navigation.navigate('Screen', { data: any });
 
-// ✅ Good
+// ✅ Use
 const navigation: StackNavigationProp<GlobalParamList> = useNavigation();
-navigation.navigate('Screen', { data: ScreenParams });
 ```
 
-**Implementation**: Analyzes navigation calls and their type parameters.
-
-**Why**:
-- Ensures correct screen names & params at compile time
+**Benefits**:
+- Type-safe navigation
+- Compile-time screen name validation
+- Safer refactoring
 - Prevents runtime navigation errors
-- Makes refactoring safer
 
-### 11. `enforceImmutability`
-**Purpose**: Enforces functional programming practices by preventing unintended mutations.
+## Strict Types in Modified Files
+
+**Rule**: Eliminates `any` usage in modified files.
 
 ```typescript
-// ❌ Bad
+// ❌ Avoid
+const handleIntentReceived = async (event: any) => {};
+
+// ✅ Use
+const handleIntentReceived = async (event: IntentEvent) => {};
+```
+
+**Benefits**:
+- Ensures type safety
+- Improves maintainability
+- Better IDE support
+- Prevents runtime type errors
+
+## Enforced Immutability
+
+**Rule**: Enforces functional programming practices and prevents unintended mutations.
+
+```typescript
+// ❌ Avoid
 let variable = 0;
 function addItem(items: string[], newItem: string) {
-    items.push(newItem); // Mutates original array
+    items.push(newItem);
 }
 
-// ✅ Good
+// ✅ Use
 const variable = 0;
 function addItem(items: readonly string[], newItem: string) {
-    return [...items, newItem]; // Returns new array
+    return [...items, newItem];
 }
 
-// ✅ Exceptions (Allowed)
+// ✅ Exceptions (allowed)
 const ref = useRef(0);
-ref.current = 5; // Allowed mutation
-const selectUserProfile = (state: RootState) => selectUser(state).profile;
+ref.current = 5; // useRef mutation allowed
 ```
 
-**Implementation**: Uses AST to detect mutable operations and enforce immutability.
+**Benefits**:
+- Predictable state transitions
+- Easier testing
+- Reduced race conditions
+- Better performance through stable references
 
-**Why**:
-- Ensures data integrity
-- Makes state transitions predictable
-- Reduces race conditions
-- Avoids unnecessary re-renders
+## ES6 Imports for Static Images
 
-### 12. `enforceStaticImageImports`
-**Purpose**: Enforces ES6 imports for static images instead of require().
+**Rule**: Use ES6 imports instead of require() for static images.
 
 ```typescript
-// ❌ Bad
+// ❌ Avoid
 const logo = require('@/assets/logo.png');
 
-// ✅ Good
+// ✅ Use
 import logo from '@/assets/logo.png';
 ```
 
-**Implementation**: Analyzes image import statements and usage patterns.
+**Benefits**:
+- Type-safe image imports
+- Consistent asset handling
+- Better TypeScript integration
+- Explicit dependencies
 
-**Why**:
-- Ensures type safety
-- Matches React Native's static asset handling
-- Makes dependencies explicit
+## Migration and Maintenance
 
-## Migration and Adoption
+- Automated fixes are available for most rules
+- Backward compatibility is maintained
+- Rules can be disabled when necessary with proper justification
+- For issues or exceptions, please raise them in the team channel
 
-### Automated Fixes
-Our custom linters provide automatic fixes for most cases:
+## Type Definitions
+
+For proper TypeScript support, ensure you have the following in your global type definitions:
+
 ```typescript
-// Before
-function fetchData(options?: FetchOptions) {}
-const navigation = useNavigation<any>();
-
-// After (automatically fixed)
-function fetchData(options: FetchOptions | undefined) {}
-const navigation: StackNavigationProp<GlobalParamList> = useNavigation();
+declare module '*.png' {
+  const value: number;
+  export default value;
+}
 ```
-
-### Backward Compatibility
-- Rules are designed to maintain backward compatibility
-- Explicit undefined passing ensures new changes don't break existing code
-- Migration scripts help transition existing code
-
-### Progress Tracking
-- Reduced `any` usage from 300 to ~40 instances in src and src-v2
-- Ongoing migration from Tailwind to CSS
-- Continuous improvement in type safety
-
-## Best Practices
-
-1. **Type Safety**:
-   - Always use TypeScript's type checker when available
-   - Prefer explicit types over `any`
-   - Use union types for optional values
-
-2. **Performance**:
-   - Cache AST traversal results when possible
-   - Use early returns to avoid unnecessary processing
-   - Leverage TypeScript's type system for complex checks
-
-3. **Maintainability**:
-   - Keep rules focused and single-purpose
-   - Document complex AST traversals
-   - Use meaningful error messages
-
-4. **Navigation Safety**:
-   - Always use `GlobalParamList` for navigation types
-   - Avoid `any` in navigation props
-   - Define proper params for each route
-
-5. **Immutability**:
-   - Use spread operators for updates
-   - Prefer immutable utility methods
-   - Document necessary mutations
-
-6. **Asset Management**:
-   - Use ES6 imports for static assets
-   - Define proper type definitions for assets
-   - Avoid runtime require() calls
-
-## Contributing
-
-To add a new custom linter:
-
-1. Create a new file in `rules/` directory
-2. Implement the rule using `@typescript-eslint/utils`
-3. Add tests for the rule
-4. Update this documentation
-5. Add the rule to `index.ts`
-
-### Migration Guidelines
-1. Use automated fixes where available
-2. Handle exceptions manually when necessary
-3. Update type definitions as needed
-4. Document any necessary rule exceptions
-
-## References
-
-- [TypeScript AST Viewer](https://ts-ast-viewer.com/)
-- [@typescript-eslint Documentation](https://typescript-eslint.io/)
-- [ESLint Rule Documentation](https://eslint.org/docs/developer-guide/working-with-rules)
-- [React Native TypeScript Guide](https://reactnative.dev/docs/typescript)
-- [TypeScript Strict Mode](https://www.typescriptlang.org/tsconfig#strict)
-- [React Native Performance](https://reactnative.dev/docs/performance)
